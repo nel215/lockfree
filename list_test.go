@@ -3,6 +3,7 @@ package main
 import (
 	"sync"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -12,6 +13,10 @@ type IntKey struct {
 
 func (key *IntKey) LessThan(other Key) bool {
 	return key.v < other.(*IntKey).v
+}
+
+func (key *IntKey) Equal(other Key) bool {
+	return key.v == other.(*IntKey).v
 }
 
 func TestFindLeftAndRightWithDeletedNode(t *testing.T) {
@@ -47,28 +52,22 @@ func TestFindLeftAndRightWith(t *testing.T) {
 	}
 }
 
-func TestInsert(t *testing.T) {
+func TestInsertAndDelete(t *testing.T) {
 	list := NewList()
 	wg := &sync.WaitGroup{}
-	n := 1024
+	n := 1024 * 64
 	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func(i int) {
-			list.Insert(&IntKey{i % 8})
+			key := i % 2
+			list.Insert(&IntKey{key})
+			time.Sleep(time.Millisecond)
+			list.Delete(&IntKey{key})
 			wg.Done()
 		}(i)
 	}
 	wg.Wait()
-	p := list.head
-	c := 0
-	for {
-		if p == nil {
-			break
-		}
-		p = (*Node)(p).next
-		c += 1
-	}
-	if c != n+2 {
-		t.Errorf("c must be n+2. but got %d", c)
+	if !((*Node)(list.head).next == list.tail) {
+		t.Errorf("head.next must be tail")
 	}
 }

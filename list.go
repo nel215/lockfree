@@ -7,6 +7,7 @@ import (
 
 type Key interface {
 	LessThan(key Key) bool
+	Equal(key Key) bool
 }
 
 type Node struct {
@@ -74,15 +75,33 @@ func (list *List) search(searchKey Key) (unsafe.Pointer, unsafe.Pointer) {
 	}
 }
 
-func (list *List) Insert(key Key) bool {
+func (list *List) Insert(key Key) {
 	newNode := unsafe.Pointer(&Node{key, nil})
 
 	for {
 		leftNode, rightNode := list.search(key)
 		(*Node)(newNode).next = rightNode
 		if atomic.CompareAndSwapPointer(&(*Node)(leftNode).next, rightNode, newNode) {
+			return
+		}
+	}
+}
+
+func (list *List) Delete(key Key) bool {
+	for {
+		leftNode, rightNode := list.search(key)
+		if rightNode == list.tail || !(*Node)(rightNode).key.Equal(key) {
+			return false
+		}
+		rightNodeNext := (*Node)(rightNode).next
+		if marked(rightNodeNext) {
+			continue
+		}
+		if atomic.CompareAndSwapPointer(&(*Node)(rightNode).next, rightNodeNext, mark(rightNodeNext)) {
+			if !atomic.CompareAndSwapPointer(&(*Node)(leftNode).next, rightNode, rightNodeNext) {
+				list.search(key)
+			}
 			return true
 		}
 	}
-	return false
 }
