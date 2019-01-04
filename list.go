@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -45,4 +46,43 @@ func (list *List) findLeftAndRight(key Key) (unsafe.Pointer, unsafe.Pointer, uns
 		}
 	}
 	return leftNode, leftNodeNext, t
+}
+
+func (list *List) search(searchKey Key) (unsafe.Pointer, unsafe.Pointer) {
+	// return two references left node and right node.
+	// left.Key < key and key <= right.Key.
+	// both nodes must be unmarked.
+	// the right node must be the immediate successor of the left node
+	for {
+		leftNode, leftNodeNext, rightNode := list.findLeftAndRight(searchKey)
+		// check nodes are adjacent
+		if leftNodeNext == rightNode {
+			if (rightNode != list.tail) && marked((*Node)(rightNode).next) {
+				continue
+			} else {
+				return leftNode, rightNode
+			}
+		}
+		// remove marked nodes
+		if atomic.CompareAndSwapPointer(&(*Node)(leftNode).next, leftNodeNext, rightNode) {
+			if (rightNode != list.tail) && marked((*Node)(rightNode).next) {
+				continue
+			} else {
+				return leftNode, rightNode
+			}
+		}
+	}
+}
+
+func (list *List) Insert(key Key) bool {
+	newNode := unsafe.Pointer(&Node{key, nil})
+
+	for {
+		leftNode, rightNode := list.search(key)
+		(*Node)(newNode).next = rightNode
+		if atomic.CompareAndSwapPointer(&(*Node)(leftNode).next, rightNode, newNode) {
+			return true
+		}
+	}
+	return false
 }
